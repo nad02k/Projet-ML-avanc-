@@ -44,7 +44,9 @@ The application will be available at `http://localhost:5173`.
 
 ### 2. Exploring the Data & ML Experiments
 
-To explore the preprocessing and data analysis steps, you can open the Jupyter notebook located in the `preprocessing/` directory.
+You can explore the full machine learning workflow (preprocessing, dimensionality reduction, and model training) in the interactive Jupyter notebooks:
+- **`preprocessing/data_preprocessing.ipynb`**: Original data exploration and cleaning.
+- **`student_performance_modeling.ipynb`**: Comprehensive dimensionality reduction analysis (PCA/t-SNE) and systematic model training with MLflow.
 
 If you have MLflow installed over Python, you can view the experiment logs by running the tracking UI in the `preprocessing/` folder:
 
