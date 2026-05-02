@@ -1,14 +1,11 @@
-import { useState } from 'react';
-import {
-    CONFUSION_MATRIX, ROC_DATA, MODEL_COMPARISON,
-    TRAINING_HISTORY
-} from '../data/constants';
+import { useState, useEffect } from 'react';
+import { fetchVisualizations } from '../services/api';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
     Tooltip as RTooltip, ResponsiveContainer, Cell, Legend,
     RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
-import { Download, BarChart3, Activity, Target, Radar as RadarIcon } from 'lucide-react';
+import { Download, BarChart3, Activity, Target, Radar as RadarIcon, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -17,7 +14,9 @@ const CustomTooltip = ({ active, payload, label }) => {
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.08)', fontSize: 12 }}>
                 <div style={{ color: '#475569', marginBottom: 4 }}>{label}</div>
                 {payload.map((p, i) => (
-                    <div key={i} style={{ color: p.color }}>{p.name}: {typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</div>
+                    <div key={i} style={{ color: p.color }}>
+                        {p.name}: {typeof p.value === 'number' ? p.value.toFixed(4) : p.value}
+                    </div>
                 ))}
             </div>
         );
@@ -25,8 +24,9 @@ const CustomTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-function ConfusionMatrix() {
-    const { labels, data } = CONFUSION_MATRIX;
+function ConfusionMatrix({ data: cmData }) {
+    if (!cmData) return null;
+    const { labels, data } = cmData;
     const total = data.flat().reduce((a, b) => a + b, 0);
     const maxVal = Math.max(...data.flat());
     const getColor = (val, i, j) => {
@@ -40,7 +40,6 @@ function ConfusionMatrix() {
             <div className="font-bold text-base mb-4" style={{ color: 'var(--text-primary)' }}>Confusion Matrix</div>
             <div className="flex justify-center">
                 <div>
-                    {/* Header row */}
                     <div className="flex items-center mb-1">
                         <div className="w-16" />
                         <div className="text-xs text-center font-semibold w-full" style={{ color: '#6366f1' }}>Predicted</div>
@@ -58,12 +57,9 @@ function ConfusionMatrix() {
                                 {labels[i]}
                             </div>
                             {row.map((val, j) => (
-                                <div
-                                    key={j}
-                                    className="cm-cell"
+                                <div key={j} className="cm-cell"
                                     style={{ background: getColor(val, i, j), border: `1px solid rgba(${i === j ? '37,99,235' : '220,38,38'},0.25)`, color: i === j ? '#1d4ed8' : '#b91c1c' }}
-                                    title={`Actual: ${labels[i]}, Predicted: ${labels[j]}, Count: ${val}`}
-                                >
+                                    title={`Actual: ${labels[i]}, Predicted: ${labels[j]}, Count: ${val}`}>
                                     <div>
                                         <div style={{ fontSize: 16, fontWeight: 800 }}>{val}</div>
                                         <div style={{ fontSize: 10, opacity: 0.7 }}>{((val / total) * 100).toFixed(0)}%</div>
@@ -76,35 +72,35 @@ function ConfusionMatrix() {
             </div>
             <div className="flex justify-center gap-6 mt-4 text-xs" style={{ color: 'var(--text-muted)' }}>
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded" style={{ background: 'rgba(99,102,241,0.6)' }} />
-                    Correct
+                    <div className="w-3 h-3 rounded" style={{ background: 'rgba(99,102,241,0.6)' }} /> Correct
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded" style={{ background: 'rgba(239,68,68,0.4)' }} />
-                    Incorrect
+                    <div className="w-3 h-3 rounded" style={{ background: 'rgba(239,68,68,0.4)' }} /> Incorrect
                 </div>
             </div>
         </div>
     );
 }
 
-const RADAR_DATA = MODEL_COMPARISON.slice(0, 4).map(m => ({
-    model: m.name,
-    Accuracy: m.accuracy,
-    F1: m.f1,
-    Precision: m.precision,
-    Recall: m.recall,
-}));
-
-const RADAR_METRICS = [
-    { key: 'Accuracy', color: '#6366f1' },
-    { key: 'F1', color: '#22d3ee' },
-    { key: 'Precision', color: '#10b981' },
-    { key: 'Recall', color: '#f59e0b' },
-];
-
 export default function Visualize() {
     const [activeChart, setActiveChart] = useState('confusion');
+    const [vizData, setVizData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        fetchVisualizations()
+            .then(setVizData)
+            .catch(err => setError(err.message))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const cm = vizData?.confusion_matrix;
+    const rocData = vizData?.roc || [];
+    const aucScore = vizData?.auc;
+    const metrics = vizData?.metrics || {};
+    const modelComparison = vizData?.model_comparison || [];
+    const trainingHistory = vizData?.training_history || [];
 
     return (
         <div className="space-y-8 animate-fade-up">
@@ -117,6 +113,16 @@ export default function Visualize() {
                     <Download size={14} /> Export PNG
                 </button>
             </div>
+
+            {error && (
+                <div className="glass-card p-6 flex items-center gap-4" style={{ borderColor: '#fde68a', background: '#fffbeb' }}>
+                    <AlertTriangle size={20} style={{ color: '#d97706' }} />
+                    <div>
+                        <div className="font-semibold text-slate-900 text-sm">Backend unavailable</div>
+                        <div className="text-sm text-slate-500">{error} — charts may not load correctly</div>
+                    </div>
+                </div>
+            )}
 
             {/* Tab bar */}
             <div className="tabs w-fit">
@@ -134,29 +140,35 @@ export default function Visualize() {
                 ))}
             </div>
 
-            {/* Confusion Matrix */}
-            {activeChart === 'confusion' && (
+            {loading && (
+                <div className="glass-card h-80 flex items-center justify-center animate-pulse">
+                    <div className="text-slate-400 text-sm">Loading chart data from backend…</div>
+                </div>
+            )}
+
+            {!loading && activeChart === 'confusion' && (
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
-                    {/* Confusion Matrix (Main) */}
                     <div className="glass-card p-6 lg:p-8 xl:col-span-2">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                            <ConfusionMatrix />
+                            <ConfusionMatrix data={cm} />
                             <div>
                                 <div className="text-sm font-semibold text-slate-900 mb-3">Metrics Summary</div>
                                 <div className="space-y-3">
                                     {[
-                                        { label: 'Accuracy', value: '83.7%', fill: '#6366f1' },
-                                        { label: 'Precision', value: '88.0%', fill: '#22d3ee' },
-                                        { label: 'Recall', value: '78.6%', fill: '#10b981' },
-                                        { label: 'F1-Score', value: '83.0%', fill: '#f59e0b' },
-                                        { label: 'Specificity', value: '88.0%', fill: '#8b5cf6' },
+                                        { label: 'Accuracy', value: metrics.accuracy, fill: '#6366f1' },
+                                        { label: 'Precision', value: metrics.precision, fill: '#22d3ee' },
+                                        { label: 'Recall', value: metrics.recall, fill: '#10b981' },
+                                        { label: 'F1-Score', value: metrics.f1, fill: '#f59e0b' },
                                     ].map(m => (
                                         <div key={m.label}>
                                             <div className="flex justify-between text-xs mb-1" style={{ color: '#475569' }}>
-                                                <span>{m.label}</span><span style={{ color: m.fill, fontWeight: 700 }}>{m.value}</span>
+                                                <span>{m.label}</span>
+                                                <span style={{ color: m.fill, fontWeight: 700 }}>
+                                                    {m.value != null ? `${(m.value * 100).toFixed(1)}%` : '—'}
+                                                </span>
                                             </div>
                                             <div className="progress-bar">
-                                                <div className="progress-fill" style={{ width: m.value, background: m.fill }} />
+                                                <div className="progress-fill" style={{ width: m.value ? `${m.value * 100}%` : '0%', background: m.fill }} />
                                             </div>
                                         </div>
                                     ))}
@@ -165,44 +177,40 @@ export default function Visualize() {
                         </div>
                     </div>
 
-                    {/* Side metrics/ROC summary */}
                     <div className="space-y-6 lg:space-y-8">
                         <div className="glass-card p-6 lg:p-8">
                             <div className="section-title mb-1">ROC Curve</div>
-                            <div className="section-subtitle mb-4">Receiver Operating Characteristic — AUC = 0.934</div>
-                            <ResponsiveContainer width="100%" height={320}>
-                                <LineChart data={ROC_DATA}>
+                            <div className="section-subtitle mb-4">
+                                AUC = {aucScore != null ? aucScore.toFixed(3) : '—'}
+                            </div>
+                            <ResponsiveContainer width="100%" height={280}>
+                                <LineChart data={rocData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.08)" />
                                     <XAxis dataKey="fpr" type="number" domain={[0, 1]} tickFormatter={v => v.toFixed(1)}
-                                        label={{ value: 'False Positive Rate', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 12 }}
-                                        tick={{ fill: '#475569', fontSize: 11 }} />
+                                        label={{ value: 'FPR', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 11 }}
+                                        tick={{ fill: '#475569', fontSize: 10 }} />
                                     <YAxis domain={[0, 1]} tickFormatter={v => v.toFixed(1)}
-                                        label={{ value: 'True Positive Rate', angle: -90, position: 'insideLeft', fill: '#475569', fontSize: 12 }}
-                                        tick={{ fill: '#475569', fontSize: 11 }} />
+                                        label={{ value: 'TPR', angle: -90, position: 'insideLeft', fill: '#475569', fontSize: 11 }}
+                                        tick={{ fill: '#475569', fontSize: 10 }} />
                                     <RTooltip content={<CustomTooltip />} />
                                     <Line type="monotone" dataKey="tpr" name="TPR" stroke="#6366f1" strokeWidth={2.5}
-                                        dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 6 }} />
-                                    {/* Random classifier diagonal */}
-                                    <Line data={[{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }]} type="linear" dataKey="tpr" name="Random"
+                                        dot={false} activeDot={{ r: 5 }} />
+                                    <Line data={[{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }]}
+                                        type="linear" dataKey="tpr" name="Random"
                                         stroke="#cbd5e1" strokeWidth={1} strokeDasharray="6 4" dot={false} />
                                 </LineChart>
                             </ResponsiveContainer>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                                <div className="flex items-center gap-1.5"><div className="w-8 h-0.5 bg-indigo-500" />XGBoost (AUC=0.934)</div>
-                                <div className="flex items-center gap-1.5"><div className="w-8 h-0.5 border-t border-slate-600 border-dashed" />Random</div>
-                            </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* ROC Curve */}
-            {activeChart === 'roc' && (
+            {!loading && activeChart === 'roc' && (
                 <div className="glass-card p-6 lg:p-8">
                     <div className="section-title mb-1">ROC Curve</div>
-                    <div className="section-subtitle mb-4">Receiver Operating Characteristic — AUC = 0.934</div>
-                    <ResponsiveContainer width="100%" height={320}>
-                        <LineChart data={ROC_DATA}>
+                    <div className="section-subtitle mb-4">AUC = {aucScore != null ? aucScore.toFixed(3) : '—'}</div>
+                    <ResponsiveContainer width="100%" height={340}>
+                        <LineChart data={rocData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.08)" />
                             <XAxis dataKey="fpr" type="number" domain={[0, 1]} tickFormatter={v => v.toFixed(1)}
                                 label={{ value: 'False Positive Rate', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 12 }}
@@ -213,28 +221,26 @@ export default function Visualize() {
                             <RTooltip content={<CustomTooltip />} />
                             <Line type="monotone" dataKey="tpr" name="TPR" stroke="#6366f1" strokeWidth={2.5}
                                 dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 6 }} />
-                            {/* Random classifier diagonal */}
                             <Line data={[{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }]} type="linear" dataKey="tpr" name="Random"
                                 stroke="#cbd5e1" strokeWidth={1} strokeDasharray="6 4" dot={false} />
                         </LineChart>
                     </ResponsiveContainer>
                     <div className="flex items-center gap-4 mt-2 text-xs" style={{ color: '#64748b' }}>
-                        <div className="flex items-center gap-1.5"><div className="w-8 h-0.5 bg-indigo-500" />XGBoost (AUC=0.934)</div>
+                        <div className="flex items-center gap-1.5"><div className="w-8 h-0.5 bg-indigo-500" />Best Model (AUC={aucScore?.toFixed(3)})</div>
                         <div className="flex items-center gap-1.5"><div className="w-8 h-0.5 border-t border-slate-600 border-dashed" />Random</div>
                     </div>
                 </div>
             )}
 
-            {/* Performance comparison */}
-            {activeChart === 'performance' && (
+            {!loading && activeChart === 'performance' && (
                 <div className="glass-card p-6 lg:p-8">
                     <div className="section-title mb-1">Model Performance Comparison</div>
                     <div className="section-subtitle mb-6">Accuracy, F1, Precision and Recall across all models</div>
                     <ResponsiveContainer width="100%" height={320}>
-                        <BarChart data={MODEL_COMPARISON} margin={{ left: -10 }}>
+                        <BarChart data={modelComparison} margin={{ left: -10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.07)" />
                             <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <YAxis domain={[70, 95]} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis domain={[70, 100]} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                             <RTooltip content={<CustomTooltip />} />
                             <Legend wrapperStyle={{ color: '#64748b', fontSize: 12, paddingTop: 12 }} />
                             <Bar dataKey="accuracy" name="Accuracy" fill="#6366f1" radius={[3, 3, 0, 0]} />
@@ -246,15 +252,15 @@ export default function Visualize() {
                 </div>
             )}
 
-            {/* Training History */}
-            {activeChart === 'history' && (
+            {!loading && activeChart === 'history' && (
                 <div className="glass-card p-6 lg:p-8">
                     <div className="section-title mb-1">Training History</div>
                     <div className="section-subtitle mb-6">Loss and Accuracy per epoch (Neural Network)</div>
                     <ResponsiveContainer width="100%" height={320}>
-                        <LineChart data={TRAINING_HISTORY}>
+                        <LineChart data={trainingHistory}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.07)" />
-                            <XAxis dataKey="epoch" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} label={{ value: 'Epoch', position: 'insideBottom', offset: -4, fill: '#64748b', fontSize: 12 }} />
+                            <XAxis dataKey="epoch" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false}
+                                label={{ value: 'Epoch', position: 'insideBottom', offset: -4, fill: '#64748b', fontSize: 12 }} />
                             <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                             <RTooltip content={<CustomTooltip />} />
                             <Legend wrapperStyle={{ color: '#64748b', fontSize: 12, paddingTop: 12 }} />
@@ -267,13 +273,12 @@ export default function Visualize() {
                 </div>
             )}
 
-            {/* Radar chart */}
-            {activeChart === 'radar' && (
+            {!loading && activeChart === 'radar' && (
                 <div className="glass-card p-6 lg:p-8">
                     <div className="section-title mb-1">Metrics Radar</div>
-                    <div className="section-subtitle mb-6">Multi-dimensional performance across top 4 models</div>
+                    <div className="section-subtitle mb-6">Multi-dimensional performance across top models</div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                        {MODEL_COMPARISON.slice(0, 4).map((m, idx) => (
+                        {modelComparison.slice(0, 4).map(m => (
                             <div key={m.name} className="p-5 rounded-xl glass-card">
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-3 h-3 rounded-full" style={{ background: m.color }} />
@@ -289,7 +294,7 @@ export default function Visualize() {
                                     ]}>
                                         <PolarGrid stroke="var(--border)" />
                                         <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                                        <PolarRadiusAxis domain={[70, 95]} tick={false} axisLine={false} />
+                                        <PolarRadiusAxis domain={[70, 100]} tick={false} axisLine={false} />
                                         <Radar dataKey="value" stroke={m.color} fill={m.color} fillOpacity={0.2} />
                                     </RadarChart>
                                 </ResponsiveContainer>

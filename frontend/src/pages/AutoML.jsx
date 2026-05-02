@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { AUTOML_ALGORITHMS } from '../data/constants';
+import { startAutoML, pollAutoML } from '../services/api';
 import {
     Zap, Play, CheckCircle, Clock, Trophy, Download,
-    BarChart3, RefreshCw, Cpu
+    BarChart3, RefreshCw, Cpu, AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -13,8 +13,8 @@ import {
 const STEPS = [
     'Data validation & preprocessing',
     'Feature engineering',
-    'Running algorithm sweep (9 models)',
-    'Hyperparameter optimization (Optuna)',
+    'Running algorithm sweep',
+    'Hyperparameter optimization',
     'Ensemble selection',
     'Final evaluation & ranking',
     'Generating report',
@@ -36,16 +36,20 @@ export default function AutoML() {
     const [running, setRunning] = useState(false);
     const [done, setDone] = useState(false);
     const [currentStep, setCurrentStep] = useState(-1);
-    const [completedAlgos, setCompletedAlgos] = useState([]);
+    const [results, setResults] = useState([]);
     const [elapsed, setElapsed] = useState(0);
+    const [error, setError] = useState(null);
+    const jobIdRef = useRef(null);
+    const pollRef = useRef(null);
     const timerRef = useRef(null);
     const startRef = useRef(null);
 
-    const handleStart = () => {
+    const handleStart = async () => {
         setRunning(true);
         setDone(false);
         setCurrentStep(0);
-        setCompletedAlgos([]);
+        setResults([]);
+        setError(null);
         setElapsed(0);
         startRef.current = Date.now();
 
@@ -53,52 +57,89 @@ export default function AutoML() {
             setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
         }, 1000);
 
-        toast.success('AutoML started! Testing 9 algorithms…');
+        toast.success('AutoML started! Testing all algorithms…');
+
+        try {
+            const { job_id } = await startAutoML();
+            jobIdRef.current = job_id;
+
+            pollRef.current = setInterval(async () => {
+                try {
+                    const status = await pollAutoML(job_id);
+                    setCurrentStep(status.step_index ?? 0);
+                    setResults(status.results || []);
+
+                    if (status.status === 'done') {
+                        stopPolling();
+                        setRunning(false);
+                        setDone(true);
+                        const best = (status.results || []).sort((a, b) => b.score - a.score)[0];
+                        toast.success(`AutoML complete! Best: ${best?.name} (${best ? (best.score * 100).toFixed(1) : '?'}%)`, { duration: 5000 });
+                    } else if (status.status === 'error') {
+                        stopPolling();
+                        setRunning(false);
+                        setError(status.error || 'AutoML failed');
+                        toast.error('AutoML encountered an error');
+                    }
+                } catch (e) {
+                    // polling hiccup — ignore
+                }
+            }, 800);
+        } catch (err) {
+            setError(err.message);
+            setRunning(false);
+            clearInterval(timerRef.current);
+            toast.error(`AutoML could not start: ${err.message}`);
+        }
     };
 
-    useEffect(() => {
-        if (!running || currentStep < 0) return;
-
-        const isLastStep = currentStep === STEPS.length - 1;
-        const delay = currentStep === 2 ? 3000 : currentStep === 3 ? 3500 : 1500;
-
-        // For step 2 (algo sweep), progressively reveal completed algos
-        if (currentStep === 2) {
-            AUTOML_ALGORITHMS.forEach((algo, i) => {
-                setTimeout(() => {
-                    setCompletedAlgos(prev => [...prev, algo]);
-                }, (i + 1) * 320);
-            });
-        }
-
-        const timeout = setTimeout(() => {
-            if (isLastStep) {
-                setRunning(false);
-                setDone(true);
-                setCurrentStep(STEPS.length);
-                clearInterval(timerRef.current);
-                toast.success('AutoML complete! Best model: XGBoost (88.9%)', { duration: 5000 });
-            } else {
-                setCurrentStep(s => s + 1);
-            }
-        }, delay);
-
-        return () => clearTimeout(timeout);
-    }, [running, currentStep]);
-
-    const handleReset = () => {
-        setRunning(false);
-        setDone(false);
-        setCurrentStep(-1);
-        setCompletedAlgos([]);
-        setElapsed(0);
+    const stopPolling = () => {
+        clearInterval(pollRef.current);
         clearInterval(timerRef.current);
     };
 
-    const formatElapsed = (s) => `${Math.floor(s / 60)}m ${s % 60}s`;
+    const handleReset = () => {
+        stopPolling();
+        setRunning(false);
+        setDone(false);
+        setCurrentStep(-1);
+        setResults([]);
+        setElapsed(0);
+        setError(null);
+        jobIdRef.current = null;
+    };
 
-    const sortedAlgos = [...AUTOML_ALGORITHMS].sort((a, b) => b.score - a.score);
-    const bestModel = sortedAlgos[0];
+    useEffect(() => () => stopPolling(), []);
+
+    const formatElapsed = s => `${Math.floor(s / 60)}m ${s % 60}s`;
+    const sortedResults = [...results].sort((a, b) => b.score - a.score);
+    const bestModel = sortedResults[0];
+
+    const progressPct = done ? 100 : currentStep >= 0 ? Math.round((currentStep / STEPS.length) * 100) : 0;
+
+    const handleExportReport = () => {
+        if (!sortedResults || sortedResults.length === 0) return;
+        let report = `=======================================\n`;
+        report += `        ML Studio AutoML Report        \n`;
+        report += `=======================================\n\n`;
+        report += `WINNING MODEL: ${bestModel.name}\n`;
+        report += `SCORE (ACCURACY): ${(bestModel.score * 100).toFixed(2)}%\n`;
+        report += `F1 SCORE: ${(bestModel.f1 * 100).toFixed(2)}%\n\n`;
+        report += `--- Sweep Breakdown ---\n`;
+        sortedResults.forEach((r, idx) => {
+            report += `${idx + 1}. ${r.name}: ACC ${(r.score * 100).toFixed(2)}% | F1 ${(r.f1 * 100).toFixed(2)}%\n`;
+        });
+        report += `\nReport generated dynamically from the ML Studio pipeline.\n`;
+        
+        const blob = new Blob([report], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `automl_sweep_report.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('Report successfully downloaded!');
+    };
 
     return (
         <div className="space-y-8 animate-fade-up">
@@ -107,17 +148,27 @@ export default function AutoML() {
                 <p className="page-subtitle">One click — automatically test all algorithms and find the best model</p>
             </div>
 
+            {error && (
+                <div className="glass-card p-5 flex items-center gap-4" style={{ borderColor: '#fca5a5', background: '#fef2f2' }}>
+                    <AlertTriangle size={20} style={{ color: '#dc2626' }} />
+                    <div>
+                        <div className="font-semibold text-slate-900 text-sm">AutoML Error</div>
+                        <div className="text-sm text-slate-500">{error}</div>
+                    </div>
+                    <button className="btn-secondary ml-auto text-sm" onClick={handleReset}>Reset</button>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left: control + steps */}
                 <div className="space-y-6">
-                    {/* Launch card */}
                     <div className="glass-card p-8 text-center">
                         <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center bg-blue-100">
                             <Zap size={28} style={{ color: '#2563eb' }} />
                         </div>
                         <div className="font-bold text-slate-900 text-lg mb-1">AutoML Engine</div>
                         <div className="text-sm mb-5 text-slate-500">
-                            Tests 9 algorithms × Optuna tuning<br />and selects the optimal model
+                            Tests all algorithms × tuning<br />and selects the optimal model
                         </div>
 
                         {!running && !done && (
@@ -147,27 +198,20 @@ export default function AutoML() {
                         )}
                     </div>
 
-                    {/* Overall progress */}
+                    {/* Progress + step tracker */}
                     {(running || done) && (
                         <div className="glass-card p-6">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-sm font-semibold text-slate-900">Overall Progress</span>
-                                <span className="text-sm font-bold" style={{ color: '#2563eb' }}>
-                                    {done ? 100 : Math.round((currentStep / STEPS.length) * 100)}%
-                                </span>
+                                <span className="text-sm font-bold" style={{ color: '#2563eb' }}>{progressPct}%</span>
                             </div>
                             <div className="progress-bar mb-4">
-                                <div className="progress-fill" style={{
-                                    width: done ? '100%' : `${(currentStep / STEPS.length) * 100}%`
-                                }} />
+                                <div className="progress-fill" style={{ width: `${progressPct}%` }} />
                             </div>
-
-                            {/* Step tracker */}
                             <div className="step-tracker">
                                 {STEPS.map((step, i) => {
                                     const isDone = done || i < currentStep;
                                     const isActive = i === currentStep && running;
-                                    const isPending = !isDone && !isActive;
                                     return (
                                         <div key={i}>
                                             <div className="step-item">
@@ -193,30 +237,29 @@ export default function AutoML() {
                     )}
                 </div>
 
-                {/* Right: results */}
+                {/* Right: live results */}
                 <div className="lg:col-span-2 space-y-8">
-                    {/* Algorithm sweep live results */}
-                    {(completedAlgos.length > 0 || done) && (
+                    {/* Algorithm sweep live chart */}
+                    {sortedResults.length > 0 && (
                         <div className="glass-card p-6 lg:p-8">
                             <div className="flex items-center gap-3 mb-6">
                                 <Cpu size={16} style={{ color: '#2563eb' }} />
                                 <div className="font-bold text-slate-900">Algorithm Sweep</div>
                                 <span className="badge badge-purple ml-auto">
-                                    {done ? AUTOML_ALGORITHMS.length : completedAlgos.length}/{AUTOML_ALGORITHMS.length}
+                                    {sortedResults.length} tested
                                 </span>
                             </div>
                             <ResponsiveContainer width="100%" height={220}>
-                                <BarChart
-                                    data={done ? sortedAlgos : [...completedAlgos].sort((a, b) => b.score - a.score)}
-                                    layout="vertical" margin={{ left: 10, right: 20 }}
-                                >
+                                <BarChart data={sortedResults} layout="vertical" margin={{ left: 10, right: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.07)" horizontal={false} />
-                                    <XAxis type="number" domain={[0.7, 0.95]} tickFormatter={v => `${(v * 100).toFixed(0)}%`}
+                                    <XAxis type="number" domain={[0.7, 1.0]}
+                                        tickFormatter={v => `${(v * 100).toFixed(0)}%`}
                                         tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                    <YAxis type="category" dataKey="name" tick={{ fill: '#334155', fontSize: 11 }} axisLine={false} tickLine={false} width={130} />
+                                    <YAxis type="category" dataKey="name"
+                                        tick={{ fill: '#334155', fontSize: 11 }} axisLine={false} tickLine={false} width={140} />
                                     <RTooltip content={<CustomTooltip />} />
-                                    <Bar dataKey="score" radius={[0, 4, 4, 0]} >
-                                        {(done ? sortedAlgos : [...completedAlgos].sort((a, b) => b.score - a.score)).map((entry, i) => (
+                                    <Bar dataKey="score" radius={[0, 4, 4, 0]}>
+                                        {sortedResults.map((_, i) => (
                                             <Cell key={i} fill={i === 0 ? '#6366f1' : 'rgba(99,102,241,0.35)'} />
                                         ))}
                                     </Bar>
@@ -225,8 +268,8 @@ export default function AutoML() {
                         </div>
                     )}
 
-                    {/* Best model recommendation */}
-                    {done && (
+                    {/* Best model card */}
+                    {done && bestModel && (
                         <div className="glass-card p-6 lg:p-8" style={{ borderColor: '#059669', background: '#f0fdf4' }}>
                             <div className="flex items-center gap-4 mb-6">
                                 <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-100">
@@ -234,9 +277,9 @@ export default function AutoML() {
                                 </div>
                                 <div>
                                     <div className="font-bold text-slate-900">Best Model Recommended</div>
-                                    <div className="text-sm text-slate-500">Selected by AutoML after full sweep + Optuna tuning</div>
+                                    <div className="text-sm text-slate-500">Selected by AutoML after full sweep</div>
                                 </div>
-                                <div>
+                                <div className="ml-auto">
                                     <div className="text-2xl font-bold" style={{ color: '#059669' }}>
                                         {(bestModel.score * 100).toFixed(1)}%
                                     </div>
@@ -248,33 +291,21 @@ export default function AutoML() {
                                 <div className="text-xl font-bold text-slate-900 mb-1.5">🚀 {bestModel.name}</div>
                                 <div className="flex flex-wrap gap-2">
                                     <span className="badge badge-green">Best Accuracy: {(bestModel.score * 100).toFixed(1)}%</span>
-                                    <span className="badge badge-cyan">Tuning: Optuna</span>
-                                    <span className="badge badge-purple">v1.5-automl</span>
+                                    {bestModel.f1 > 0 && (
+                                        <span className="badge badge-cyan">F1: {(bestModel.f1 * 100).toFixed(1)}%</span>
+                                    )}
+                                    <span className="badge badge-purple">AutoML sweep</span>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-4 gap-4 mb-6">
-                                {[
-                                    ['Accuracy', '88.9%', '#4f46e5'],
-                                    ['F1-Score', '87.6%', '#0891b2'],
-                                    ['Precision', '88.1%', '#059669'],
-                                    ['Recall', '87.2%', '#d97706'],
-                                ].map(([l, v, c]) => (
-                                    <div key={l} className="text-center p-3 rounded-lg bg-slate-50 border border-slate-200">
-                                        <div className="text-base font-bold" style={{ color: c }}>{v}</div>
-                                        <div className="text-xs mt-0.5 text-slate-500">{l}</div>
-                                    </div>
-                                ))}
-                            </div>
-
                             <div className="flex gap-2">
-                                <button className="btn-primary flex-1" onClick={() => toast.success('XGBoost AutoML model deployed!')}>
+                                <button className="btn-primary flex-1" onClick={() => toast.success(`${bestModel.name} model deployed!`)}>
                                     <Zap size={14} /> Deploy Model
                                 </button>
-                                <button className="btn-secondary flex-1" onClick={() => toast.success('Model exported as xgboost_automl.joblib')}>
+                                <button className="btn-secondary flex-1" onClick={() => toast.success(`Model exported as ${bestModel.name.toLowerCase().replace(/\s/g, '_')}.joblib`)}>
                                     <Download size={14} /> Export (joblib)
                                 </button>
-                                <button className="btn-secondary" onClick={() => toast.success('Full report exported as PDF')}>
+                                <button className="btn-secondary" onClick={handleExportReport}>
                                     <BarChart3 size={14} /> Report
                                 </button>
                             </div>
@@ -282,13 +313,13 @@ export default function AutoML() {
                     )}
 
                     {/* Idle state */}
-                    {!running && !done && (
+                    {!running && !done && !error && (
                         <div className="glass-card p-12 text-center flex flex-col items-center justify-center" style={{ minHeight: 320 }}>
                             <Zap size={48} className="mb-4 text-blue-200" />
                             <div className="text-lg font-bold text-slate-900 mb-2">Ready to Launch</div>
                             <div className="text-sm max-w-sm text-slate-500">
-                                Click <strong className="text-blue-600">Launch AutoML</strong> to automatically test all 9 algorithms,
-                                run Optuna hyperparameter tuning, and get the best model recommended for your dataset.
+                                Click <strong className="text-blue-600">Launch AutoML</strong> to automatically test all algorithms,
+                                run hyperparameter tuning, and get the best model recommended for your dataset.
                             </div>
                         </div>
                     )}
