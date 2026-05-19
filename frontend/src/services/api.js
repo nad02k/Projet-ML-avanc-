@@ -28,6 +28,20 @@ async function _post(path, body) {
     return res.json();
 }
 
+async function _postFile(path, file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${BASE}${path}`, {
+        method: "POST",
+        body: formData,
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+}
+
 // ── Health ─────────────────────────────────────────────────────────────── //
 export const checkHealth = () => _get("/health");
 
@@ -36,6 +50,7 @@ export const fetchDashboard = () => _get("/dashboard");
 
 // ── Dataset ────────────────────────────────────────────────────────────── //
 export const fetchDataset = () => _get("/dataset");
+export const uploadDataset = (file) => _postFile("/dataset/upload", file);
 
 // ── Experiments ────────────────────────────────────────────────────────── //
 export const fetchExperiments = () => _get("/experiments");
@@ -58,3 +73,7 @@ export const tuneModel = (modelId, method) =>
 // ── AutoML ─────────────────────────────────────────────────────────────── //
 export const startAutoML = () => _post("/automl/run", {});
 export const pollAutoML  = (jobId) => _get(`/automl/status/${jobId}`);
+
+// ── Predict ────────────────────────────────────────────────────────────── //
+export const predictModel = (modelId, features) =>
+    _post("/predict", { model_id: modelId, features });

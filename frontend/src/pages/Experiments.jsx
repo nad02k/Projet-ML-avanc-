@@ -73,9 +73,9 @@ export default function Experiments() {
                         <div className="h-3 bg-slate-100 rounded w-20 mx-auto" />
                     </div>
                 )) : [
-                    { label: 'Total Runs', value: experiments.length, color: '#6366f1' },
+                    { label: 'Total Runs', value: experiments.length, color: 'var(--accent)' },
                     { label: 'Best Accuracy', value: `${(bestAcc * 100).toFixed(1)}%`, color: '#10b981' },
-                    { label: 'Avg F1', value: `${(avgF1 * 100).toFixed(1)}%`, color: '#22d3ee' },
+                    { label: 'Avg F1', value: `${(avgF1 * 100).toFixed(1)}%`, color: 'var(--accent3)' },
                     { label: 'Model Versions', value: experiments.length, color: '#f59e0b' },
                 ].map(s => (
                     <div key={s.label} className="stat-card text-center">
@@ -100,19 +100,18 @@ export default function Experiments() {
                     const isBest = i === 0;
                     return (
                         <div key={exp.id} className="glass-card overflow-hidden"
-                            style={isBest ? { borderColor: '#059669' } : {}}>
+                            style={isBest ? { borderColor: 'rgba(16, 185, 129, 0.45)', boxShadow: '0 0 16px -2px rgba(16, 185, 129, 0.15)' } : {}}>
                             <div
                                 className="p-6 flex flex-wrap items-center gap-6 cursor-pointer hover:bg-slate-50 transition-colors"
                                 onClick={() => setExpanded(isExpanded ? null : exp.id)}>
                                 {isBest && (
-                                    <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                                        style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid #10b981' }}>
-                                        <TrendingUp size={12} style={{ color: '#10b981' }} />
+                                    <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-emerald-500/10 border border-emerald-500/35 text-emerald-500">
+                                        <TrendingUp size={12} className="text-emerald-500" />
                                     </div>
                                 )}
                                 <div className="flex-shrink-0">
                                     <div className="font-bold text-slate-900 text-sm">{exp.model}</div>
-                                    <div className="font-mono text-xs mt-0.5" style={{ color: '#2563eb' }}>{exp.id}</div>
+                                    <div className="font-mono text-xs mt-0.5" style={{ color: 'var(--accent)' }}>{exp.id}</div>
                                 </div>
                                 <div className="flex items-center gap-3 flex-wrap">
                                     <span className={`badge ${isBest ? 'badge-green' : 'badge-purple'}`}>

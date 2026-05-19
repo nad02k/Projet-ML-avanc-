@@ -9,6 +9,7 @@ import Data from './pages/Data';
 import Visualize from './pages/Visualize';
 import Experiments from './pages/Experiments';
 import AutoML from './pages/AutoML';
+import Predict from './pages/Predict';
 import { ThemeProvider } from './context/ThemeContext';
 
 export default function App() {
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/visualize" element={<Visualize />} />
             <Route path="/experiments" element={<Experiments />} />
             <Route path="/automl" element={<AutoML />} />
+            <Route path="/predict" element={<Predict />} />
           </Routes>
         </Layout>
       </BrowserRouter>

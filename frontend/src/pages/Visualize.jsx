@@ -11,11 +11,12 @@ import toast from 'react-hot-toast';
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload?.length) {
         return (
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.08)', fontSize: 12 }}>
-                <div style={{ color: '#475569', marginBottom: 4 }}>{label}</div>
+            <div className="glass-card !p-3.5 !bg-white/95 dark:!bg-slate-900/95 shadow-xl border border-slate-200/90 dark:border-slate-800/90 text-xs">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">{label}</div>
                 {payload.map((p, i) => (
-                    <div key={i} style={{ color: p.color }}>
-                        {p.name}: {typeof p.value === 'number' ? p.value.toFixed(4) : p.value}
+                    <div key={i} className="flex items-center gap-2 mb-1" style={{ color: p.color || 'var(--text-secondary)' }}>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: p.color }} />
+                        <span>{p.name}: <span className="font-mono font-bold">{typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span></span>
                     </div>
                 ))}
             </div>
@@ -42,27 +43,27 @@ function ConfusionMatrix({ data: cmData }) {
                 <div>
                     <div className="flex items-center mb-1">
                         <div className="w-16" />
-                        <div className="text-xs text-center font-semibold w-full" style={{ color: '#6366f1' }}>Predicted</div>
+                        <div className="text-xs text-center font-semibold w-full" style={{ color: 'var(--accent)' }}>Predicted</div>
                     </div>
                     <div className="flex items-center gap-1 mb-1">
                         <div className="w-16" />
                         {labels.map(l => (
-                            <div key={l} className="w-16 text-center text-xs font-bold" style={{ color: '#94a3b8' }}>{l}</div>
+                            <div key={l} className="w-16 text-center text-xs font-bold" style={{ color: 'var(--text-muted)' }}>{l}</div>
                         ))}
                     </div>
                     {data.map((row, i) => (
                         <div key={i} className="flex items-center gap-1 mb-1">
-                            <div className="w-16 text-right pr-2 text-xs font-bold" style={{ color: '#94a3b8' }}>
-                                {i === 0 && <span className="text-xs" style={{ color: '#22d3ee' }}>Actual </span>}
+                            <div className="w-16 text-right pr-2 text-xs font-bold" style={{ color: 'var(--text-muted)' }}>
+                                {i === 0 && <span className="text-xs" style={{ color: 'var(--accent3)' }}>Actual </span>}
                                 {labels[i]}
                             </div>
                             {row.map((val, j) => (
                                 <div key={j} className="cm-cell"
-                                    style={{ background: getColor(val, i, j), border: `1px solid rgba(${i === j ? '37,99,235' : '220,38,38'},0.25)`, color: i === j ? '#1d4ed8' : '#b91c1c' }}
+                                    style={{ background: getColor(val, i, j), border: `1px solid ${i === j ? 'var(--border-focus)' : 'rgba(239,68,68,0.25)'}`, color: 'var(--text-primary)' }}
                                     title={`Actual: ${labels[i]}, Predicted: ${labels[j]}, Count: ${val}`}>
                                     <div>
                                         <div style={{ fontSize: 16, fontWeight: 800 }}>{val}</div>
-                                        <div style={{ fontSize: 10, opacity: 0.7 }}>{((val / total) * 100).toFixed(0)}%</div>
+                                        <div style={{ fontSize: 10, opacity: 0.8 }}>{((val / total) * 100).toFixed(0)}%</div>
                                     </div>
                                 </div>
                             ))}
@@ -115,10 +116,10 @@ export default function Visualize() {
             </div>
 
             {error && (
-                <div className="glass-card p-6 flex items-center gap-4" style={{ borderColor: '#fde68a', background: '#fffbeb' }}>
-                    <AlertTriangle size={20} style={{ color: '#d97706' }} />
+                <div className="glass-card p-6 flex items-center gap-4 border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                    <AlertTriangle size={20} className="text-amber-500 flex-shrink-0 animate-pulse" />
                     <div>
-                        <div className="font-semibold text-slate-900 text-sm">Backend unavailable</div>
+                        <div className="font-bold text-slate-900 text-sm">Backend unavailable</div>
                         <div className="text-sm text-slate-500">{error} — charts may not load correctly</div>
                     </div>
                 </div>
@@ -152,16 +153,16 @@ export default function Visualize() {
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
                             <ConfusionMatrix data={cm} />
                             <div>
-                                <div className="text-sm font-semibold text-slate-900 mb-3">Metrics Summary</div>
+                                <div className="text-sm font-bold text-slate-900 mb-3">Metrics Summary</div>
                                 <div className="space-y-3">
                                     {[
-                                        { label: 'Accuracy', value: metrics.accuracy, fill: '#6366f1' },
-                                        { label: 'Precision', value: metrics.precision, fill: '#22d3ee' },
+                                        { label: 'Accuracy', value: metrics.accuracy, fill: 'var(--accent)' },
+                                        { label: 'Precision', value: metrics.precision, fill: 'var(--accent3)' },
                                         { label: 'Recall', value: metrics.recall, fill: '#10b981' },
                                         { label: 'F1-Score', value: metrics.f1, fill: '#f59e0b' },
                                     ].map(m => (
                                         <div key={m.label}>
-                                            <div className="flex justify-between text-xs mb-1" style={{ color: '#475569' }}>
+                                            <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
                                                 <span>{m.label}</span>
                                                 <span style={{ color: m.fill, fontWeight: 700 }}>
                                                     {m.value != null ? `${(m.value * 100).toFixed(1)}%` : '—'}
@@ -187,17 +188,17 @@ export default function Visualize() {
                                 <LineChart data={rocData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.08)" />
                                     <XAxis dataKey="fpr" type="number" domain={[0, 1]} tickFormatter={v => v.toFixed(1)}
-                                        label={{ value: 'FPR', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 11 }}
-                                        tick={{ fill: '#475569', fontSize: 10 }} />
+                                        label={{ value: 'FPR', position: 'insideBottom', offset: -4, fill: 'var(--text-muted)', fontSize: 11 }}
+                                        tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
                                     <YAxis domain={[0, 1]} tickFormatter={v => v.toFixed(1)}
-                                        label={{ value: 'TPR', angle: -90, position: 'insideLeft', fill: '#475569', fontSize: 11 }}
-                                        tick={{ fill: '#475569', fontSize: 10 }} />
+                                        label={{ value: 'TPR', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)', fontSize: 11 }}
+                                        tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
                                     <RTooltip content={<CustomTooltip />} />
-                                    <Line type="monotone" dataKey="tpr" name="TPR" stroke="#6366f1" strokeWidth={2.5}
+                                    <Line type="monotone" dataKey="tpr" name="TPR" stroke="var(--accent)" strokeWidth={2.5}
                                         dot={false} activeDot={{ r: 5 }} />
                                     <Line data={[{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }]}
                                         type="linear" dataKey="tpr" name="Random"
-                                        stroke="#cbd5e1" strokeWidth={1} strokeDasharray="6 4" dot={false} />
+                                        stroke="var(--border)" strokeWidth={1} strokeDasharray="6 4" dot={false} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
@@ -213,21 +214,21 @@ export default function Visualize() {
                         <LineChart data={rocData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.08)" />
                             <XAxis dataKey="fpr" type="number" domain={[0, 1]} tickFormatter={v => v.toFixed(1)}
-                                label={{ value: 'False Positive Rate', position: 'insideBottom', offset: -4, fill: '#475569', fontSize: 12 }}
-                                tick={{ fill: '#475569', fontSize: 11 }} />
+                                label={{ value: 'False Positive Rate', position: 'insideBottom', offset: -4, fill: 'var(--text-muted)', fontSize: 12 }}
+                                tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                             <YAxis domain={[0, 1]} tickFormatter={v => v.toFixed(1)}
-                                label={{ value: 'True Positive Rate', angle: -90, position: 'insideLeft', fill: '#475569', fontSize: 12 }}
-                                tick={{ fill: '#475569', fontSize: 11 }} />
+                                label={{ value: 'True Positive Rate', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)', fontSize: 12 }}
+                                tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                             <RTooltip content={<CustomTooltip />} />
-                            <Line type="monotone" dataKey="tpr" name="TPR" stroke="#6366f1" strokeWidth={2.5}
-                                dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 6 }} />
+                            <Line type="monotone" dataKey="tpr" name="TPR" stroke="var(--accent)" strokeWidth={2.5}
+                                dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 6 }} />
                             <Line data={[{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }]} type="linear" dataKey="tpr" name="Random"
-                                stroke="#cbd5e1" strokeWidth={1} strokeDasharray="6 4" dot={false} />
+                                stroke="var(--border)" strokeWidth={1} strokeDasharray="6 4" dot={false} />
                         </LineChart>
                     </ResponsiveContainer>
-                    <div className="flex items-center gap-4 mt-2 text-xs" style={{ color: '#64748b' }}>
-                        <div className="flex items-center gap-1.5"><div className="w-8 h-0.5 bg-indigo-500" />Best Model (AUC={aucScore?.toFixed(3)})</div>
-                        <div className="flex items-center gap-1.5"><div className="w-8 h-0.5 border-t border-slate-600 border-dashed" />Random</div>
+                    <div className="flex items-center gap-4 mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        <div className="flex items-center gap-1.5"><div className="w-8 h-0.5" style={{ background: 'var(--accent)' }} />Best Model (AUC={aucScore?.toFixed(3)})</div>
+                        <div className="flex items-center gap-1.5"><div className="w-8 h-0.5 border-t border-dashed" style={{ borderColor: 'var(--text-muted)' }} />Random</div>
                     </div>
                 </div>
             )}
@@ -237,18 +238,18 @@ export default function Visualize() {
                     <div className="section-title mb-1">Model Performance Comparison</div>
                     <div className="section-subtitle mb-6">Accuracy, F1, Precision and Recall across all models</div>
                     <ResponsiveContainer width="100%" height={320}>
-                        <BarChart data={modelComparison} margin={{ left: -10 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.07)" />
-                            <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <YAxis domain={[70, 100]} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <RTooltip content={<CustomTooltip />} />
-                            <Legend wrapperStyle={{ color: '#64748b', fontSize: 12, paddingTop: 12 }} />
-                            <Bar dataKey="accuracy" name="Accuracy" fill="#6366f1" radius={[3, 3, 0, 0]} />
-                            <Bar dataKey="f1" name="F1-Score" fill="#22d3ee" radius={[3, 3, 0, 0]} />
-                            <Bar dataKey="precision" name="Precision" fill="#10b981" radius={[3, 3, 0, 0]} />
-                            <Bar dataKey="recall" name="Recall" fill="#f59e0b" radius={[3, 3, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                                        <BarChart data={modelComparison} margin={{ left: -10 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.07)" />
+                                            <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                            <YAxis domain={[70, 100]} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                            <RTooltip content={<CustomTooltip />} />
+                                            <Legend wrapperStyle={{ color: 'var(--text-muted)', fontSize: 12, paddingTop: 12 }} />
+                                            <Bar dataKey="accuracy" name="Accuracy" fill="var(--accent)" radius={[3, 3, 0, 0]} />
+                                            <Bar dataKey="f1" name="F1-Score" fill="var(--accent3)" radius={[3, 3, 0, 0]} />
+                                            <Bar dataKey="precision" name="Precision" fill="#10b981" radius={[3, 3, 0, 0]} />
+                                            <Bar dataKey="recall" name="Recall" fill="#f59e0b" radius={[3, 3, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
                 </div>
             )}
 
@@ -257,19 +258,19 @@ export default function Visualize() {
                     <div className="section-title mb-1">Training History</div>
                     <div className="section-subtitle mb-6">Loss and Accuracy per epoch (Neural Network)</div>
                     <ResponsiveContainer width="100%" height={320}>
-                        <LineChart data={trainingHistory}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.07)" />
-                            <XAxis dataKey="epoch" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false}
-                                label={{ value: 'Epoch', position: 'insideBottom', offset: -4, fill: '#64748b', fontSize: 12 }} />
-                            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <RTooltip content={<CustomTooltip />} />
-                            <Legend wrapperStyle={{ color: '#64748b', fontSize: 12, paddingTop: 12 }} />
-                            <Line type="monotone" dataKey="trainLoss" name="Train Loss" stroke="#ef4444" strokeWidth={2} dot={false} />
-                            <Line type="monotone" dataKey="valLoss" name="Val Loss" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="5 3" />
-                            <Line type="monotone" dataKey="trainAcc" name="Train Acc" stroke="#6366f1" strokeWidth={2} dot={false} />
-                            <Line type="monotone" dataKey="valAcc" name="Val Acc" stroke="#22d3ee" strokeWidth={2} dot={false} strokeDasharray="5 3" />
-                        </LineChart>
-                    </ResponsiveContainer>
+                                        <LineChart data={trainingHistory}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.07)" />
+                                            <XAxis dataKey="epoch" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false}
+                                                label={{ value: 'Epoch', position: 'insideBottom', offset: -4, fill: 'var(--text-muted)', fontSize: 12 }} />
+                                            <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                            <RTooltip content={<CustomTooltip />} />
+                                            <Legend wrapperStyle={{ color: 'var(--text-muted)', fontSize: 12, paddingTop: 12 }} />
+                                            <Line type="monotone" dataKey="trainLoss" name="Train Loss" stroke="#ef4444" strokeWidth={2} dot={false} />
+                                            <Line type="monotone" dataKey="valLoss" name="Val Loss" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="5 3" />
+                                            <Line type="monotone" dataKey="trainAcc" name="Train Acc" stroke="var(--accent)" strokeWidth={2} dot={false} />
+                                            <Line type="monotone" dataKey="valAcc" name="Val Acc" stroke="var(--accent3)" strokeWidth={2} dot={false} strokeDasharray="5 3" />
+                                        </LineChart>
+                                    </ResponsiveContainer>
                 </div>
             )}
 

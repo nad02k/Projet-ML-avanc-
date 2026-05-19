@@ -23,9 +23,11 @@ const STEPS = [
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload?.length) {
         return (
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.08)', fontSize: 12 }}>
-                <div style={{ color: '#475569', marginBottom: 4 }}>{label}</div>
-                <div style={{ color: '#4f46e5', fontWeight: 700 }}>{(payload[0].value * 100).toFixed(1)}% accuracy</div>
+            <div className="glass-card !p-3 !bg-white/90 !backdrop-blur-md shadow-xl border-none">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2">{label}</div>
+                <div className="text-sm font-bold text-accent">
+                    {(payload[0].value * 100).toFixed(1)}% accuracy
+                </div>
             </div>
         );
     }
@@ -149,8 +151,8 @@ export default function AutoML() {
             </div>
 
             {error && (
-                <div className="glass-card p-5 flex items-center gap-4" style={{ borderColor: '#fca5a5', background: '#fef2f2' }}>
-                    <AlertTriangle size={20} style={{ color: '#dc2626' }} />
+                <div className="glass-card p-5 flex items-center gap-4 border border-rose-500/25 bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400">
+                    <AlertTriangle size={20} className="text-rose-500 flex-shrink-0 animate-pulse" />
                     <div>
                         <div className="font-semibold text-slate-900 text-sm">AutoML Error</div>
                         <div className="text-sm text-slate-500">{error}</div>
@@ -163,12 +165,12 @@ export default function AutoML() {
                 {/* Left: control + steps */}
                 <div className="space-y-6">
                     <div className="glass-card p-8 text-center">
-                        <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center bg-blue-100">
-                            <Zap size={28} style={{ color: '#2563eb' }} />
+                        <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center bg-accent-soft border border-border">
+                            <Zap size={28} className="text-accent" />
                         </div>
                         <div className="font-bold text-slate-900 text-lg mb-1">AutoML Engine</div>
-                        <div className="text-sm mb-5 text-slate-500">
-                            Tests all algorithms × tuning<br />and selects the optimal model
+                        <div className="text-sm mb-6 text-slate-500">
+                            Automatically tests and tunes all algorithms to select the optimal model.
                         </div>
 
                         {!running && !done && (
@@ -191,8 +193,8 @@ export default function AutoML() {
                                 <button className="btn-primary w-full" onClick={handleReset}>
                                     <RefreshCw size={14} /> Run Again
                                 </button>
-                                <div className="text-sm" style={{ color: '#059669' }}>
-                                    <CheckCircle size={11} className="inline mr-1" />Completed in {formatElapsed(elapsed)}
+                                <div className="text-sm text-emerald-500 flex items-center justify-center gap-1.5 mt-2">
+                                    <CheckCircle size={12} />Completed in {formatElapsed(elapsed)}
                                 </div>
                             </div>
                         )}
@@ -203,7 +205,7 @@ export default function AutoML() {
                         <div className="glass-card p-6">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-sm font-semibold text-slate-900">Overall Progress</span>
-                                <span className="text-sm font-bold" style={{ color: '#2563eb' }}>{progressPct}%</span>
+                                <span className="text-sm font-bold text-accent">{progressPct}%</span>
                             </div>
                             <div className="progress-bar mb-4">
                                 <div className="progress-fill" style={{ width: `${progressPct}%` }} />
@@ -221,7 +223,7 @@ export default function AutoML() {
                                                         : <span style={{ fontSize: 11 }}>{i + 1}</span>}
                                                 </div>
                                                 <div className="pt-1 pb-2">
-                                                    <div className="text-xs font-medium" style={{ color: isDone ? '#0f172a' : isActive ? '#2563eb' : '#94a3b8' }}>
+                                                    <div className={`text-xs font-bold ${isDone ? 'text-emerald-500' : isActive ? 'text-accent' : 'text-slate-400'}`}>
                                                         {step}
                                                     </div>
                                                 </div>
@@ -254,13 +256,13 @@ export default function AutoML() {
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.07)" horizontal={false} />
                                     <XAxis type="number" domain={[0.7, 1.0]}
                                         tickFormatter={v => `${(v * 100).toFixed(0)}%`}
-                                        tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                        tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
                                     <YAxis type="category" dataKey="name"
-                                        tick={{ fill: '#334155', fontSize: 11 }} axisLine={false} tickLine={false} width={140} />
+                                        tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} width={140} />
                                     <RTooltip content={<CustomTooltip />} />
-                                    <Bar dataKey="score" radius={[0, 4, 4, 0]}>
+                                    <Bar dataKey="score" radius={[0, 6, 6, 0]} barSize={24}>
                                         {sortedResults.map((_, i) => (
-                                            <Cell key={i} fill={i === 0 ? '#6366f1' : 'rgba(99,102,241,0.35)'} />
+                                            <Cell key={i} fill={i === 0 ? 'var(--accent)' : 'rgba(79, 70, 229, 0.35)'} />
                                         ))}
                                     </Bar>
                                 </BarChart>
@@ -270,24 +272,24 @@ export default function AutoML() {
 
                     {/* Best model card */}
                     {done && bestModel && (
-                        <div className="glass-card p-6 lg:p-8" style={{ borderColor: '#059669', background: '#f0fdf4' }}>
+                        <div className="glass-card p-6 lg:p-8 border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
                             <div className="flex items-center gap-4 mb-6">
-                                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-100">
-                                    <Trophy size={18} style={{ color: '#059669' }} />
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20">
+                                    <Trophy size={18} className="text-emerald-500" />
                                 </div>
                                 <div>
                                     <div className="font-bold text-slate-900">Best Model Recommended</div>
                                     <div className="text-sm text-slate-500">Selected by AutoML after full sweep</div>
                                 </div>
                                 <div className="ml-auto">
-                                    <div className="text-2xl font-bold" style={{ color: '#059669' }}>
+                                    <div className="text-2xl font-bold text-emerald-500">
                                         {(bestModel.score * 100).toFixed(1)}%
                                     </div>
                                     <div className="text-xs text-right text-slate-500">accuracy</div>
                                 </div>
                             </div>
 
-                            <div className="p-4 rounded-xl mb-5 bg-white border border-slate-200">
+                            <div className="p-4 rounded-xl mb-5 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800/50">
                                 <div className="text-xl font-bold text-slate-900 mb-1.5">🚀 {bestModel.name}</div>
                                 <div className="flex flex-wrap gap-2">
                                     <span className="badge badge-green">Best Accuracy: {(bestModel.score * 100).toFixed(1)}%</span>

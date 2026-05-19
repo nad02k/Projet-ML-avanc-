@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ALGORITHMS } from '../data/constants';
 import { trainModel, tuneModel } from '../services/api';
 import {
@@ -54,12 +55,19 @@ function buildDefaults(algo) {
     return Object.fromEntries(algo.hyperparams.map(p => [p.id, p.default]));
 }
 
-export default function Config({ selectedIds }) {
-    const models = selectedIds.length > 0
-        ? ALGORITHMS.filter(a => selectedIds.includes(a.id))
-        : [ALGORITHMS[1]];
+export default function Config({ selectedIds = [] }) {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const modelParam = searchParams.get('model');
 
-    const [activeModel, setActiveModel] = useState(models[0]?.id || ALGORITHMS[1].id);
+    const [activeModel, setActiveModel] = useState(() => {
+        if (modelParam && ALGORITHMS.some(a => a.id === modelParam)) {
+            return modelParam;
+        }
+        if (selectedIds && selectedIds.length > 0) {
+            return selectedIds[0];
+        }
+        return ALGORITHMS[1].id;
+    });
     const algo = ALGORITHMS.find(a => a.id === activeModel) || ALGORITHMS[1];
 
     const [params, setParams] = useState(buildDefaults(algo));
@@ -71,7 +79,18 @@ export default function Config({ selectedIds }) {
         try { return JSON.parse(localStorage.getItem('ml_configs') || '[]'); } catch { return []; }
     });
 
+    useEffect(() => {
+        if (modelParam && ALGORITHMS.some(a => a.id === modelParam)) {
+            setActiveModel(modelParam);
+        }
+    }, [modelParam]);
+
     useEffect(() => { setParams(buildDefaults(algo)); setLastResult(null); }, [activeModel]);
+
+    const handleModelSelect = (id) => {
+        setActiveModel(id);
+        setSearchParams({ model: id });
+    };
 
     const handleParam = (id, val) => setParams(prev => ({ ...prev, [id]: val }));
     const handleReset = () => { setParams(buildDefaults(algo)); toast.success('Reset to defaults'); };
@@ -128,7 +147,7 @@ export default function Config({ selectedIds }) {
         }
     };
 
-    const displayModels = selectedIds.length > 0 ? ALGORITHMS.filter(a => selectedIds.includes(a.id)) : ALGORITHMS;
+    const displayModels = ALGORITHMS;
 
     const tuningDescriptions = {
         GridSearch: 'Exhaustive search over all parameter combinations. Guaranteed optimal but slow on large grids.',
@@ -147,25 +166,53 @@ export default function Config({ selectedIds }) {
                 {/* Left: model selector + current params */}
                 <div className="space-y-6">
                     <div className="glass-card p-5">
-                        <div className="form-label mb-3">Select Model</div>
-                        <div className="flex flex-col gap-2">
-                            {displayModels.map(a => (
-                                <button key={a.id} onClick={() => setActiveModel(a.id)}
-                                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left"
-                                    style={{
-                                        background: activeModel === a.id ? '#eff6ff' : 'var(--bg-muted)',
-                                        border: `1px solid ${activeModel === a.id ? '#bfdbfe' : 'var(--border)'}`,
-                                        color: activeModel === a.id ? '#1d4ed8' : 'var(--text-secondary)',
-                                    }}>
-                                    <span className="text-lg">{a.icon}</span>
-                                    <span>{a.short}</span>
-                                </button>
-                            ))}
+                        <div className="form-label mb-4 uppercase tracking-wider text-xs font-bold text-slate-400">ML Families</div>
+                        <div className="space-y-6">
+                            {['Classification', 'Regression', 'Ensemble'].map(cat => {
+                                const catModels = displayModels.filter(m => m.category === cat);
+                                if (catModels.length === 0) return null;
+                                return (
+                                    <div key={cat} className="space-y-2">
+                                        <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-1">
+                                            {cat}
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            {catModels.map(a => {
+                                                const isGlobalSelected = selectedIds?.includes(a.id);
+                                                return (
+                                                    <button 
+                                                        key={a.id} 
+                                                        onClick={() => handleModelSelect(a.id)}
+                                                        className={`flex flex-col p-3 rounded-xl transition-all text-left border relative ${
+                                                            activeModel === a.id 
+                                                            ? 'bg-blue-50/70 border-blue-200 text-blue-800 shadow-sm' 
+                                                            : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-1.5 mb-1 justify-between w-full">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-sm">{a.icon}</span>
+                                                                <span className="font-bold text-xs text-slate-800">{a.name} ({a.short})</span>
+                                                            </div>
+                                                            {isGlobalSelected && (
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Selected in Hub" />
+                                                            )}
+                                                        </div>
+                                                        <span className="text-[10px] leading-relaxed text-slate-400 font-normal">
+                                                            {a.description.length > 70 ? a.description.substring(0, 70) + '...' : a.description}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
                     <div className="glass-card p-5">
-                        <div className="font-bold mb-4" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Current Parameters</div>
+                        <div className="font-bold mb-4 text-xs text-slate-500 uppercase tracking-wider">Current Parameters</div>
                         <div className="space-y-2 font-mono text-xs">
                             {Object.entries(params).map(([k, v]) => (
                                 <div key={k} className="flex justify-between gap-2 py-1" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -180,16 +227,15 @@ export default function Config({ selectedIds }) {
                 {/* Middle: hyperparams form + training result */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="glass-card p-7">
-                        <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-start justify-between mb-4">
                             <div>
                                 <h2 className="section-title">{algo.icon} {algo.name}</h2>
-                                <p className="section-subtitle">Adjust parameters below</p>
+                                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed bg-slate-50/80 border border-slate-100 p-3 rounded-xl shadow-inner">
+                                    {algo.description}
+                                </p>
                             </div>
-                            <button className="btn-secondary text-sm" onClick={handleReset}>
-                                <RotateCcw size={14} /> Reset
-                            </button>
                         </div>
-                        <div>
+                        <div className="mt-6">
                             {algo.hyperparams.map(p => (
                                 <HyperparamField key={p.id} param={p} value={params[p.id] ?? p.default} onChange={handleParam} />
                             ))}
@@ -213,27 +259,27 @@ export default function Config({ selectedIds }) {
 
                     {/* Live training result card */}
                     {lastResult && (
-                        <div className="glass-card p-6" style={{ borderColor: '#059669', background: '#f0fdf4' }}>
+                        <div className="glass-card p-6 border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
                             <div className="flex items-center gap-3 mb-4">
-                                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                                    <CheckCircle size={16} style={{ color: '#059669' }} />
+                                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                                    <CheckCircle size={16} className="text-emerald-500" />
                                 </div>
                                 <div>
                                     <div className="font-bold text-slate-900">Training Complete</div>
                                     <div className="text-xs text-slate-500">{algo.name} · Real backend result</div>
                                 </div>
-                                <div className="ml-auto text-2xl font-bold" style={{ color: '#059669' }}>
+                                <div className="ml-auto text-2xl font-bold text-emerald-500">
                                     {(lastResult.accuracy * 100).toFixed(1)}%
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
-                                    ['Accuracy', lastResult.accuracy, '#4f46e5'],
-                                    ['F1-Score', lastResult.f1, '#0891b2'],
-                                    ['Precision', lastResult.precision, '#059669'],
-                                    ['Recall', lastResult.recall, '#d97706'],
+                                    ['Accuracy', lastResult.accuracy, 'var(--accent)'],
+                                    ['F1-Score', lastResult.f1, 'var(--accent3)'],
+                                    ['Precision', lastResult.precision, '#10b981'],
+                                    ['Recall', lastResult.recall, '#f59e0b'],
                                 ].map(([l, v, c]) => (
-                                    <div key={l} className="text-center p-3 rounded-lg bg-white border border-slate-200">
+                                    <div key={l} className="text-center p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800/50">
                                         <div className="text-base font-bold" style={{ color: c }}>
                                             {v != null ? `${(v * 100).toFixed(1)}%` : '—'}
                                         </div>
@@ -247,8 +293,8 @@ export default function Config({ selectedIds }) {
                     {/* Auto-tuning card */}
                     <div className="glass-card p-7">
                         <div className="flex items-center gap-3 mb-5">
-                            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-100">
-                                <Sparkles size={18} style={{ color: '#2563eb' }} />
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-accent-soft border border-border">
+                                <Sparkles size={18} className="text-accent" />
                             </div>
                             <div>
                                 <div className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Auto-Tuning</div>
@@ -258,18 +304,16 @@ export default function Config({ selectedIds }) {
                         <div className="flex gap-2 mb-4">
                             {TUNING_METHODS.map(m => (
                                 <button key={m} onClick={() => setTuning(m)}
-                                    className="flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all"
-                                    style={{
-                                        background: tuning === m ? '#eff6ff' : 'var(--bg-muted)',
-                                        border: `1px solid ${tuning === m ? '#bfdbfe' : 'var(--border)'}`,
-                                        color: tuning === m ? '#1d4ed8' : 'var(--text-secondary)',
-                                    }}>
+                                    className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all border ${
+                                        tuning === m 
+                                        ? 'bg-accent-soft border-accent text-accent' 
+                                        : 'bg-bg-muted border-border text-text-secondary hover:border-border-focus'
+                                    }`}>
                                     {m}
                                 </button>
                             ))}
                         </div>
-                        <div className="p-4 rounded-xl mb-5 text-sm leading-relaxed"
-                            style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}>
+                        <div className="p-4 rounded-xl mb-5 text-sm leading-relaxed border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400">
                             {tuningDescriptions[tuning]}
                         </div>
                         <button className="btn-primary w-full" onClick={handleAutoTune}

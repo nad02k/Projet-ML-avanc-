@@ -16,11 +16,14 @@ const ACTIVITY_COLOR = ['#10b981', '#22d3ee', '#f59e0b', '#6366f1'];
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload?.length) {
         return (
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                <div style={{ color: '#475569', fontSize: 12, marginBottom: 4 }}>{label}</div>
+            <div className="glass-card !p-3 !bg-white/90 !backdrop-blur-md shadow-xl border-none">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2">{label}</div>
                 {payload.map((p, i) => (
-                    <div key={i} style={{ color: p.color, fontSize: 13, fontWeight: 600 }}>
-                        {p.name}: {p.value}%
+                    <div key={i} className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+                        <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {p.name}: <span className="font-mono">{p.value}%</span>
+                        </div>
                     </div>
                 ))}
             </div>
@@ -52,17 +55,17 @@ export default function Dashboard() {
     }, []);
 
     const stats = data ? [
-        { label: 'Best Accuracy', value: `${data.stats.best_accuracy}%`, delta: 'top model', icon: TrendingUp, color: '#6366f1' },
-        { label: 'Models Available', value: String(data.stats.models_trained), delta: 'algorithms', icon: Brain, color: '#22d3ee' },
-        { label: 'Experiments', value: String(data.stats.experiments), delta: 'total runs', icon: FlaskConical, color: '#10b981' },
-        { label: 'Dataset Size', value: String(data.stats.dataset_size), delta: `${data.stats.n_features} features`, icon: Database, color: '#f59e0b' },
+        { label: 'Top Accuracy', value: `${data.stats.best_accuracy}%`, delta: 'Global Best', icon: TrendingUp, color: '#4f46e5' },
+        { label: 'Models', value: String(data.stats.models_trained), delta: 'Trained', icon: Brain, color: '#8b5cf6' },
+        { label: 'Runs', value: String(data.stats.experiments), delta: 'Total', icon: FlaskConical, color: '#10b981' },
+        { label: 'Features', value: String(data.stats.n_features), delta: 'Inputs', icon: Database, color: '#f59e0b' },
     ] : [];
 
     return (
         <div className="space-y-8 animate-fade-up">
             <div>
-                <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-                <p style={{ color: '#475569', fontSize: 14, marginTop: 4 }}>
+                <h1 className="page-title">Dashboard</h1>
+                <p className="page-subtitle">
                     ML Studio — Student Performance Prediction
                     {error && <span className="ml-3 text-red-500 text-xs">⚠ Backend offline — showing cached data</span>}
                 </p>
@@ -104,26 +107,26 @@ export default function Dashboard() {
                         <ResponsiveContainer width="100%" height={220}>
                             <BarChart data={data?.model_comparison || []} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.08)" />
-                                <XAxis dataKey="name" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
-                                <YAxis domain={[70, 100]} tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                <YAxis domain={[70, 100]} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
                                 <RTooltip content={<CustomTooltip />} />
-                                <Bar dataKey="accuracy" name="Accuracy" radius={[4, 4, 0, 0]}>
+                                <Bar dataKey="accuracy" name="Accuracy" radius={[6, 6, 0, 0]} barSize={32}>
                                     {(data?.model_comparison || []).map((entry, idx) => (
-                                        <Cell key={idx} fill={idx === 0 ? '#6366f1' : 'rgba(99,102,241,0.45)'} />
+                                        <Cell key={idx} fill={idx === 0 ? 'var(--accent)' : 'rgba(99, 102, 241, 0.3)'} />
                                     ))}
                                 </Bar>
-                                <Bar dataKey="f1" name="F1-Score" radius={[4, 4, 0, 0]}>
+                                <Bar dataKey="f1" name="F1-Score" radius={[6, 6, 0, 0]} barSize={32}>
                                     {(data?.model_comparison || []).map((entry, idx) => (
-                                        <Cell key={idx} fill={idx === 0 ? '#22d3ee' : 'rgba(34,211,238,0.4)'} />
+                                        <Cell key={idx} fill={idx === 0 ? 'var(--accent3)' : 'rgba(6, 182, 212, 0.3)'} />
                                     ))}
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     )}
                     <div className="flex items-center gap-4 mt-2">
-                        {[['#6366f1', 'Accuracy'], ['#22d3ee', 'F1-Score']].map(([c, l]) => (
-                            <div key={l} className="flex items-center gap-1.5 text-xs" style={{ color: '#475569' }}>
-                                <div className="w-3 h-3 rounded-sm" style={{ background: c }} />
+                        {[['var(--accent)', 'Accuracy'], ['var(--accent3)', 'F1-Score']].map(([c, l]) => (
+                            <div key={l} className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                                <div className="w-3 h-3 rounded-sm animate-pulse" style={{ background: c }} />
                                 {l}
                             </div>
                         ))}
@@ -154,7 +157,7 @@ export default function Dashboard() {
                                         <div className="text-xs font-medium text-slate-900 leading-relaxed">
                                             {exp.model} training complete — {(exp.accuracy * 100).toFixed(1)}% accuracy
                                         </div>
-                                        <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>{exp.date}</div>
+                                        <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{exp.date}</div>
                                     </div>
                                 </div>
                             ))
@@ -186,23 +189,23 @@ export default function Dashboard() {
                             <tbody>
                                 {(data?.recent_experiments || []).slice(0, 5).map((e) => (
                                     <tr key={e.id}>
-                                        <td><span className="font-mono text-xs" style={{ color: '#6366f1' }}>{e.id}</span></td>
+                                        <td><span className="font-mono text-xs" style={{ color: 'var(--accent)' }}>{e.id}</span></td>
                                         <td className="font-medium text-slate-900">{e.model}</td>
                                         <td>
                                             <div className="flex items-center gap-2">
                                                 <div className="progress-bar w-16">
                                                     <div className="progress-fill" style={{ width: `${e.accuracy * 100}%` }} />
                                                 </div>
-                                                <span style={{ color: '#059669', fontSize: 12, fontWeight: 600 }}>
+                                                <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
                                                     {(e.accuracy * 100).toFixed(1)}%
                                                 </span>
                                             </div>
                                         </td>
-                                        <td style={{ color: '#475569' }}>{(e.f1 * 100).toFixed(1)}%</td>
+                                        <td style={{ color: 'var(--text-secondary)' }}>{(e.f1 * 100).toFixed(1)}%</td>
                                         <td><span className="badge badge-purple">{e.tuning}</span></td>
-                                        <td style={{ color: '#475569' }}><Clock size={11} className="inline mr-1" />{e.duration}</td>
+                                        <td style={{ color: 'var(--text-secondary)' }}><Clock size={11} className="inline mr-1" />{e.duration}</td>
                                         <td><span className="badge badge-cyan">{e.version}</span></td>
-                                        <td style={{ color: '#64748b', fontSize: 12 }}>{e.date}</td>
+                                        <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{e.date}</td>
                                     </tr>
                                 ))}
                             </tbody>
