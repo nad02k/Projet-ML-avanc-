@@ -38,6 +38,8 @@ ROOT = Path(__file__).parent.parent          # d:\Projet_ML_avance
 DATA_DIR = ROOT / "data"
 MODELS_DIR = ROOT / "models"
 PREPROCESSING_DIR = ROOT / "preprocessing"
+SCRATCH_DIR = ROOT / "scratch"
+SCRATCH_DIR.mkdir(exist_ok=True)
 
 ACTIVE_DATASET_CSV = DATA_DIR / "active_dataset.csv"
 EXPERIMENT_CSV = DATA_DIR / "experiment_results.csv"
@@ -395,20 +397,23 @@ def _run_automl(job_id: str):
                         mlflow.sklearn.log_model(mdl, "model")
                         
                         # --- Tâche 5: Log Artifacts ---
+                        # Ensure scratch directory exists (in case it was deleted at runtime)
+                        SCRATCH_DIR.mkdir(exist_ok=True)
+                        
                         # 1. Confusion Matrix Plot
                         plt.figure(figsize=(8, 6))
                         sns.heatmap(metrics["confusion_matrix"], annot=True, fmt='d', cmap='Blues')
                         plt.title(f'Confusion Matrix: {mname}')
                         plt.ylabel('Actual')
                         plt.xlabel('Predicted')
-                        cm_path = ROOT / "scratch" / f"cm_{mid}.png"
+                        cm_path = SCRATCH_DIR / f"cm_{mid}.png"
                         plt.savefig(cm_path)
                         plt.close()
                         mlflow.log_artifact(str(cm_path), artifact_path="plots")
                         
                         # 2. Classification Report Text
                         report = classification_report(y_test, y_pred)
-                        report_path = ROOT / "scratch" / f"report_{mid}.txt"
+                        report_path = SCRATCH_DIR / f"report_{mid}.txt"
                         with open(report_path, "w") as f:
                             f.write(report)
                         mlflow.log_artifact(str(report_path), artifact_path="reports")
@@ -857,18 +862,21 @@ def train():
             })
             mlflow.sklearn.log_model(model, "model")
 
+            # Ensure scratch directory exists (in case it was deleted at runtime)
+            SCRATCH_DIR.mkdir(exist_ok=True)
+
             # 1. Confusion Matrix Plot
             plt.figure(figsize=(8, 6))
             sns.heatmap(metrics["confusion_matrix"], annot=True, fmt='d', cmap='Blues')
             plt.title(f'Confusion Matrix: {model_id}')
-            cm_path = ROOT / "scratch" / f"cm_manual_{model_id}.png"
+            cm_path = SCRATCH_DIR / f"cm_manual_{model_id}.png"
             plt.savefig(cm_path)
             plt.close()
             mlflow.log_artifact(str(cm_path), artifact_path="plots")
 
             # 2. Classification Report Text
             report = classification_report(y_test, y_pred)
-            report_path = ROOT / "scratch" / f"report_manual_{model_id}.txt"
+            report_path = SCRATCH_DIR / f"report_manual_{model_id}.txt"
             with open(report_path, "w") as f:
                 f.write(report)
             mlflow.log_artifact(str(report_path), artifact_path="reports")
