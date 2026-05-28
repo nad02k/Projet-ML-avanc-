@@ -2,6 +2,7 @@ data/
 *.csv
 .env
 venv/
+.venv/
 mlruns/
 mlflow.db
 __pycache__/

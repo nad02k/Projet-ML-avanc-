@@ -1,7 +1,7 @@
 /**
  * api.js — Central API service layer.
  * All backend calls go through here.
- * Requests go to /api/* which Vite proxies to Flask on :5000.
+ * Requests go to /api/* which Vite proxies to Flask on :5001.
  */
 
 const BASE = "/api";
@@ -77,3 +77,30 @@ export const pollAutoML  = (jobId) => _get(`/automl/status/${jobId}`);
 // ── Predict ────────────────────────────────────────────────────────────── //
 export const predictModel = (modelId, features) =>
     _post("/predict", { model_id: modelId, features });
+
+// ── MLflow UI ──────────────────────────────────────────────────────────── //
+export const fetchMlflowStatus = () => _get("/mlflow/status");
+export const startMlflowUi = (force = true) => _post("/mlflow/start", { force });
+
+// ── Model Registry (Partie 3) ──────────────────────────────────────────── //
+export const fetchRegistryModels = () => _get("/registry/models");
+export const fetchRegistryBestRun = () => _get("/registry/best-run");
+export const registerBestModel = (opts = {}) => _post("/registry/register", opts);
+export const promoteModelVersion = (name, version, stage = "Production") =>
+    _post("/registry/promote", { name, version, stage });
+
+// ── Data drift (Partie 6) ──────────────────────────────────────────────── //
+export const fetchDriftLatest = () => _get("/drift/latest");
+export const runDriftCheck = (triggerRetrain = true) =>
+    _post("/drift/run", { trigger_retrain: triggerRetrain });
+
+// ── MLflow serving (Partie 4) ──────────────────────────────────────────── //
+export const fetchServingStatus = () => _get("/serving/status");
+export const startModelServing = (name = "mon_modele_production", stage = "Production") =>
+    _post("/serving/start", { name, stage });
+export const servingPredict = (features) => _post("/serving/predict", { features });
+
+// ── CI/CD Quality Gate (Partie 5) ──────────────────────────────────────── //
+export const fetchCicdStatus = () => _get("/cicd/status");
+export const runCicdPipeline = () => _post("/cicd/run", {});
+export const fetchCicdHistory = () => _get("/cicd/history");

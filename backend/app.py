@@ -4,6 +4,7 @@ Serves data, trains models and runs AutoML for the React frontend.
 """
 
 import os
+import sys
 import uuid
 import time
 import threading
@@ -29,7 +30,23 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import label_binarize, StandardScaler
 from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
-# mlflow imported lazily inside _run_automl
+
+from mlflow_setup import setup_mlflow, agent_log, MLFLOW_DB, mlflow_tracking_uri
+from mlflow_process import (
+    start_mlflow_ui,
+    mlflow_ui_status,
+    start_model_serving,
+    serving_status,
+)
+from registry_service import (
+    REGISTRY_NAME,
+    find_best_run,
+    register_best_model,
+    list_registered_models,
+    promote_version,
+)
+from drift_service import run_drift_check, get_latest_drift, DRIFT_REPORT_HTML
+from cicd_service import get_cicd_status, run_cicd_pipeline, get_cicd_history
 
 # --------------------------------------------------------------------------- #
 # Paths
@@ -50,7 +67,25 @@ FEATURES_PKL = MODELS_DIR / "features.pkl"
 app = Flask(__name__)
 CORS(app)
 
-# MLflow config moved to lazy setup
+
+def _bootstrap_artifacts():
+    """Ensure active_dataset + splits exist when student_clean.csv is present."""
+    clean = DATA_DIR / "student_clean.csv"
+    if not SPLITS_PKL.exists() and clean.exists():
+        df = pd.read_csv(clean)
+        result = run_pipeline(df)
+        agent_log(
+            "A",
+            "app.py:_bootstrap_artifacts",
+            "pipeline from student_clean",
+            result,
+        )
+    elif not ACTIVE_DATASET_CSV.exists() and clean.exists():
+        import shutil
+        shutil.copy(clean, ACTIVE_DATASET_CSV)
+        if not SPLITS_PKL.exists():
+            run_pipeline(pd.read_csv(clean))
+
 
 # --------------------------------------------------------------------------- #
 # Helpers: load data
@@ -286,7 +321,8 @@ def promote_model_to_production(run_id: str, model_id: str, accuracy: float):
     """Registers the model and promotes it to Production stage if accuracy is high."""
     import mlflow
     from mlflow.tracking import MlflowClient
-    
+
+    setup_mlflow()
     client = MlflowClient()
     model_name = f"Student_Performance_{model_id.upper()}"
     model_uri = f"runs:/{run_id}/model"
@@ -336,10 +372,15 @@ def promote_model_to_production(run_id: str, model_id: str, accuracy: float):
 def _run_automl(job_id: str):
     import mlflow
     import mlflow.sklearn
-    
-    # Configure MLflow lazily
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+
+    uri = setup_mlflow()
     mlflow.set_experiment("Student_Performance_AutoML")
+    agent_log(
+        "B",
+        "app.py:_run_automl",
+        "mlflow configured",
+        {"uri": uri, "db_exists": MLFLOW_DB.exists(), "job_id": job_id},
+    )
 
     job = _automl_jobs[job_id]
     job["status"] = "running"
@@ -368,68 +409,66 @@ def _run_automl(job_id: str):
         job["step_index"] = i
 
         if step == "Algorithm sweep":
-            for mid, mname, mparams in AUTOML_MODELS:
-                try:
-                    # MLflow Run
-                    with mlflow.start_run(run_name=f"AutoML_{mid}", nested=True):
-                        mdl = build_model(mid, mparams) # build_model handles SVM probability
-                        mdl.fit(X_train, y_train)
-                        y_pred = mdl.predict(X_test)
-                        
-                        proba = None
-                        if hasattr(mdl, "predict_proba"):
-                            classes = np.unique(y_train)
-                            if len(classes) == 2:
-                                proba = mdl.predict_proba(X_test)[:, 1]
-                                
-                        metrics = compute_metrics(y_test, y_pred, proba)
-                        acc = metrics["accuracy"]
-                        f1 = metrics["f1"]
-                        
-                        # Log to MLflow
-                        mlflow.log_params(mparams)
-                        mlflow.log_metrics({
-                            "accuracy": acc,
-                            "f1_score": f1,
-                            "precision": metrics["precision"],
-                            "recall": metrics["recall"]
-                        })
-                        mlflow.sklearn.log_model(mdl, "model")
-                        
-                        # --- Tâche 5: Log Artifacts ---
-                        # Ensure scratch directory exists (in case it was deleted at runtime)
-                        SCRATCH_DIR.mkdir(exist_ok=True)
-                        
-                        # 1. Confusion Matrix Plot
-                        plt.figure(figsize=(8, 6))
-                        sns.heatmap(metrics["confusion_matrix"], annot=True, fmt='d', cmap='Blues')
-                        plt.title(f'Confusion Matrix: {mname}')
-                        plt.ylabel('Actual')
-                        plt.xlabel('Predicted')
-                        cm_path = SCRATCH_DIR / f"cm_{mid}.png"
-                        plt.savefig(cm_path)
-                        plt.close()
-                        mlflow.log_artifact(str(cm_path), artifact_path="plots")
-                        
-                        # 2. Classification Report Text
-                        report = classification_report(y_test, y_pred)
-                        report_path = SCRATCH_DIR / f"report_{mid}.txt"
-                        with open(report_path, "w") as f:
-                            f.write(report)
-                        mlflow.log_artifact(str(report_path), artifact_path="reports")
-                        
-                        # --- Tâche 5: Model Registry ---
-                        promote_model_to_production(mlflow.active_run().info.run_id, mid, acc)
-                        
-                        # Log to CSV for UI dashboard
-                        append_experiment(mparams, metrics, model_id=mid)
-                        
-                        job["results"].append({"name": mname, "score": round(acc, 4), "f1": round(f1, 4)})
-                        print(f">>> AutoML: {mname} finished (Acc: {acc})")
-                except Exception as e:
-                    print(f">>> AutoML error for {mid}: {e}")
-                    traceback.print_exc()
-                    job["results"].append({"name": mname, "score": 0.0, "f1": 0.0})
+            with mlflow.start_run(run_name=f"AutoML_sweep_{job_id[:8]}"):
+                for mid, mname, mparams in AUTOML_MODELS:
+                    try:
+                        with mlflow.start_run(run_name=f"AutoML_{mid}", nested=True):
+                            mdl = build_model(mid, mparams)
+                            mdl.fit(X_train, y_train)
+                            y_pred = mdl.predict(X_test)
+
+                            proba = None
+                            if hasattr(mdl, "predict_proba"):
+                                classes = np.unique(y_train)
+                                if len(classes) == 2:
+                                    proba = mdl.predict_proba(X_test)[:, 1]
+
+                            metrics = compute_metrics(y_test, y_pred, proba)
+                            acc = metrics["accuracy"]
+                            f1 = metrics["f1"]
+
+                            mlflow.log_params(mparams)
+                            mlflow.log_metrics({
+                                "accuracy": acc,
+                                "f1_score": f1,
+                                "precision": metrics["precision"],
+                                "recall": metrics["recall"],
+                            })
+                            mlflow.sklearn.log_model(mdl, "model")
+
+                            SCRATCH_DIR.mkdir(exist_ok=True)
+
+                            plt.figure(figsize=(8, 6))
+                            sns.heatmap(metrics["confusion_matrix"], annot=True, fmt='d', cmap='Blues')
+                            plt.title(f'Confusion Matrix: {mname}')
+                            plt.ylabel('Actual')
+                            plt.xlabel('Predicted')
+                            cm_path = SCRATCH_DIR / f"cm_{mid}.png"
+                            plt.savefig(cm_path)
+                            plt.close()
+                            mlflow.log_artifact(str(cm_path), artifact_path="plots")
+
+                            report = classification_report(y_test, y_pred)
+                            report_path = SCRATCH_DIR / f"report_{mid}.txt"
+                            with open(report_path, "w") as f:
+                                f.write(report)
+                            mlflow.log_artifact(str(report_path), artifact_path="reports")
+
+                            promote_model_to_production(mlflow.active_run().info.run_id, mid, acc)
+                            append_experiment(mparams, metrics, model_id=mid)
+
+                            job["results"].append({"name": mname, "score": round(acc, 4), "f1": round(f1, 4)})
+                            print(f">>> AutoML: {mname} finished (Acc: {acc})")
+                    except Exception as e:
+                        print(f">>> AutoML error for {mid}: {e}")
+                        traceback.print_exc()
+                        agent_log(
+                            "C",
+                            "app.py:_run_automl",
+                            "model training error",
+                            {"model_id": mid, "error": str(e)[:300]},
+                        )
+                        job["results"].append({"name": mname, "score": 0.0, "f1": 0.0})
         else:
             # Minor delay for visual feedback in UI, but not 1s
             time.sleep(0.2)
@@ -445,6 +484,17 @@ def _run_automl(job_id: str):
 
 @app.route("/api/health")
 def health():
+    agent_log(
+        "E",
+        "app.py:health",
+        "health check",
+        {
+            "splits": SPLITS_PKL.exists(),
+            "active_csv": ACTIVE_DATASET_CSV.exists(),
+            "mlflow_db": MLFLOW_DB.exists(),
+            "tracking_uri": mlflow_tracking_uri(),
+        },
+    )
     return jsonify({"status": "ok"})
 
 
@@ -832,7 +882,15 @@ def train():
     try:
         import mlflow
         import mlflow.sklearn
+
+        uri = setup_mlflow()
         mlflow.set_experiment("Student_Performance")
+        agent_log(
+            "D",
+            "app.py:train",
+            "manual train start",
+            {"uri": uri, "model_id": model_id},
+        )
 
         with mlflow.start_run(run_name=f"manual_train_{model_id}"):
             model = build_model(model_id, params)
@@ -1149,35 +1207,164 @@ def upload_dataset():
 # Entry point
 # --------------------------------------------------------------------------- #
 
-def start_mlflow():
-    """Starts the MLflow UI in a background process."""
-    python_exe = str(ROOT / "venv" / "Scripts" / "python.exe")
-    if not os.path.exists(python_exe):
-        python_exe = "python"
+# ── MLOps: MLflow UI, Registry, Drift, Serving ─────────────────────────────── #
 
-    # Use ABSOLUTE path for sqlite so mlflow always finds it regardless of cwd
-    mlflow_db = str(ROOT / "mlflow.db")
+@app.route("/api/mlflow/status")
+def api_mlflow_status():
+    return jsonify(clean_json(mlflow_ui_status()))
 
-    cmd = [
-        python_exe,
-        "-m", "mlflow", "ui",
-        "--backend-store-uri", f"sqlite:///{mlflow_db}",
-        "--port", "5000",
-        "--host", "0.0.0.0",
-    ]
+
+@app.route("/api/mlflow/start", methods=["POST"])
+def api_mlflow_start():
+    body = request.get_json(silent=True) or {}
+    result = start_mlflow_ui(force=bool(body.get("force")))
+    return jsonify(clean_json(result)), (200 if result.get("status") == "running" else 503)
+
+
+@app.route("/api/registry/models")
+def api_registry_models():
     try:
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(ROOT),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        )
-        print(f">>> MLflow UI starting on http://localhost:5000 (pid={proc.pid})")
+        return jsonify(clean_json({"models": list_registered_models(), "primary_name": REGISTRY_NAME}))
     except Exception as e:
-        print(f">>> Failed to auto-start MLflow: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/registry/best-run")
+def api_registry_best_run():
+    best = find_best_run()
+    if not best:
+        return jsonify({"error": "No training runs found"}), 404
+    return jsonify(clean_json(best))
+
+
+@app.route("/api/registry/register", methods=["POST"])
+def api_registry_register():
+    body = request.get_json(silent=True) or {}
+    result = register_best_model(
+        name=body.get("name", REGISTRY_NAME),
+        description=body.get("description", "Modèle de classification — version optimisée"),
+        validated_by=body.get("validated_by", "equipe_data"),
+    )
+    code = 200 if result.get("status") == "ok" else 400
+    return jsonify(clean_json(result)), code
+
+
+@app.route("/api/registry/promote", methods=["POST"])
+def api_registry_promote():
+    body = request.get_json(silent=True) or {}
+    name = body.get("name", REGISTRY_NAME)
+    version = body.get("version")
+    stage = body.get("stage", "Production")
+    if version is None:
+        return jsonify({"error": "version required"}), 400
+    try:
+        result = promote_version(name, int(version), stage)
+        return jsonify(clean_json(result))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/drift/run", methods=["POST"])
+def api_drift_run():
+    body = request.get_json(silent=True) or {}
+    try:
+        result = run_drift_check(trigger_retrain=body.get("trigger_retrain", True))
+        return jsonify(clean_json(result))
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/drift/latest")
+def api_drift_latest():
+    return jsonify(clean_json(get_latest_drift()))
+
+
+@app.route("/api/drift/report")
+def api_drift_report():
+    if not DRIFT_REPORT_HTML.exists():
+        return jsonify({"error": "No Evidently report yet. Run a drift check first."}), 404
+    from flask import send_file
+    return send_file(DRIFT_REPORT_HTML, mimetype="text/html")
+
+
+@app.route("/api/serving/status")
+def api_serving_status():
+    return jsonify(clean_json(serving_status()))
+
+
+@app.route("/api/serving/start", methods=["POST"])
+def api_serving_start():
+    body = request.get_json(silent=True) or {}
+    result = start_model_serving(
+        model_name=body.get("name", REGISTRY_NAME),
+        stage=body.get("stage", "Production"),
+    )
+    code = 200 if result.get("status") == "running" else 503
+    return jsonify(clean_json(result)), code
+
+
+@app.route("/api/serving/predict", methods=["POST"])
+def api_serving_predict_proxy():
+    """Proxy predict to MLflow native serving on :1234."""
+    import requests as req
+    body = request.get_json(silent=True) or {}
+    features = body.get("features", [])
+    columns = body.get("columns")
+    if not columns and FEATURES_PKL.exists():
+        columns = joblib.load(FEATURES_PKL)
+    if not columns:
+        return jsonify({"error": "columns required"}), 400
+    row = [features.get(c, 0) for c in columns] if isinstance(features, dict) else features
+    payload = {"dataframe_split": {"columns": list(columns), "data": [row]}}
+    try:
+        resp = req.post(
+            "http://127.0.0.1:1234/invocations",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+        )
+        return jsonify(resp.json()), resp.status_code
+    except Exception as e:
+        return jsonify({"error": f"Serving not available: {e}. Start serving from Registry page."}), 503
+
+
+@app.route("/api/cicd/status")
+def api_cicd_status():
+    try:
+        return jsonify(clean_json(get_cicd_status()))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/cicd/run", methods=["POST"])
+def api_cicd_run():
+    try:
+        result = run_cicd_pipeline()
+        return jsonify(clean_json(result))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/cicd/history")
+def api_cicd_history():
+    try:
+        return jsonify(clean_json(get_cicd_history()))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    start_mlflow()
+    _bootstrap_artifacts()
+    ui = start_mlflow_ui()
+    if ui.get("status") == "running":
+        print(f">>> MLflow UI: {ui.get('url')}")
+    else:
+        print(f">>> MLflow UI failed: {ui.get('message')} — see {ui.get('log_file')}")
     app.run(host="0.0.0.0", port=5001, debug=True, use_reloader=False)

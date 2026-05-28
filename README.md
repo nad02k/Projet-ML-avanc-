@@ -28,34 +28,51 @@ An advanced machine learning project featuring a full-featured React frontend (M
 - **MLflow** for experiment tracking and model registry
 - **Scikit-learn** (implied) for modeling and preprocessing
 
-## 🚀 Getting Started
+## 🚀 Getting Started (ML Studio app)
 
-### 1. Running the Frontend (ML Studio)
+### Prerequisites
 
-Ensure you have [Node.js](https://nodejs.org/) installed, then navigate to the frontend directory:
+- Python 3.10+ and Node.js 18+
+- Dataset artifacts in `data/` (`active_dataset.csv`, `splits.pkl`) — upload a CSV in the UI or run `preprocessing/data_preprocessing.ipynb`
 
-```bash
-cd frontend
-npm install
-npm run dev
+### 1. Python environment
+
+```powershell
+cd D:\Projet_ML_avance
+python -m venv .venv
+.\.venv\Scripts\pip install -r backend\requirements.txt
 ```
 
-The application will be available at `http://localhost:5173`.
+### 2. Backend (Flask + MLflow)
 
-### 2. Exploring the Data & ML Experiments
+```powershell
+.\start-backend.ps1
+```
+
+- API: `http://localhost:5001/api/health`
+- MLflow UI: `http://localhost:5000` (SQLite store: `mlflow.db` at project root)
+
+### 3. Frontend
+
+In a second terminal:
+
+```powershell
+.\start-frontend.ps1
+```
+
+Open **http://localhost:5173** — Vite proxies `/api` to the backend on port **5001**.
+
+### 4. Exploring notebooks & ML experiments
 
 You can explore the full machine learning workflow (preprocessing, dimensionality reduction, and model training) in the interactive Jupyter notebooks:
 - **`preprocessing/data_preprocessing.ipynb`**: Original data exploration and cleaning.
 - **`student_performance_modeling.ipynb`**: Comprehensive dimensionality reduction analysis (PCA/t-SNE) and systematic model training with MLflow.
 
-If you have MLflow installed over Python, you can view the experiment logs by running the tracking UI in the `preprocessing/` folder:
+Or launch MLflow UI only:
 
-```bash
-cd preprocessing
-mlflow ui --backend-store-uri sqlite:///mlflow.db
+```powershell
+.\.venv\Scripts\python.exe -m mlflow ui --port 5000 --backend-store-uri sqlite:///D:/Projet_ML_avance/mlflow.db
 ```
-
-This will launch the MLflow tracking UI, typically available at `http://127.0.0.1:5000`.
 
 ## 🤝 Contributing
 

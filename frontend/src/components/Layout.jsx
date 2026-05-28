@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Brain, Settings, Database,
     BarChart3, FlaskConical, Zap, ChevronLeft,
     ChevronRight, Menu, GraduationCap, Sun, Moon,
-    Eye
+    Eye, Package, Activity, GitBranch
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
@@ -12,6 +12,9 @@ const NAV_ITEMS = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/automl', icon: Zap, label: 'AutoML' },
     { to: '/experiments', icon: FlaskConical, label: 'Experiments' },
+    { to: '/registry', icon: Package, label: 'Registry' },
+    { to: '/monitoring', icon: Activity, label: 'Drift' },
+    { to: '/cicd', icon: GitBranch, label: 'CI/CD Gate' },
     { to: '/models', icon: Brain, label: 'Model Hub' },
     { to: '/config', icon: Settings, label: 'Train Models' },
     { to: '/predict', icon: Eye, label: 'Test Model' },

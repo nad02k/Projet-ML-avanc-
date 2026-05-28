@@ -12,3 +12,5 @@ seaborn
 scipy
 requests
 evidently>=0.4
+fastapi
+uvicorn

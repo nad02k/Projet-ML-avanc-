@@ -10,6 +10,9 @@ import Visualize from './pages/Visualize';
 import Experiments from './pages/Experiments';
 import AutoML from './pages/AutoML';
 import Predict from './pages/Predict';
+import Registry from './pages/Registry';
+import Monitoring from './pages/Monitoring';
+import CICD from './pages/CICD';
 import { ThemeProvider } from './context/ThemeContext';
 
 export default function App() {
@@ -52,6 +55,9 @@ export default function App() {
             <Route path="/data" element={<Data />} />
             <Route path="/visualize" element={<Visualize />} />
             <Route path="/experiments" element={<Experiments />} />
+            <Route path="/registry" element={<Registry />} />
+            <Route path="/monitoring" element={<Monitoring />} />
+            <Route path="/cicd" element={<CICD />} />
             <Route path="/automl" element={<AutoML />} />
             <Route path="/predict" element={<Predict />} />
           </Routes>

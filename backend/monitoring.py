@@ -7,6 +7,8 @@ import requests
 from pathlib import Path
 from scipy import stats
 
+from mlflow_setup import setup_mlflow, agent_log
+
 # Setup paths
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
@@ -28,7 +30,8 @@ def simulate_drift(df):
 
 def run_monitoring():
     print(">>> MLOps: Starting Data Drift Monitoring...")
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    uri = setup_mlflow()
+    agent_log("B", "monitoring.py:run_monitoring", "mlflow uri", {"uri": uri})
     mlflow.set_experiment("Student_Performance_Monitoring")
     
     try:
@@ -117,5 +120,6 @@ def run_monitoring():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    run_monitoring()
+    from drift_service import run_drift_check
+    print(run_drift_check())
 
